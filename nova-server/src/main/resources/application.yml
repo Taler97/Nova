@@ -1,0 +1,63 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-response: true
+
+spring:
+  profiles:
+    active: dev
+  datasource:
+    druid:
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      url: jdbc:mysql://localhost:3306/sky_take_out?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
+      username: root
+      password: ${DB_PASSWORD:}
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 0
+      timeout: 3000ms
+      password: ${REDIS_PASSWORD:}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:sql/schema.sql
+      data-locations: classpath:sql/data.sql
+      continue-on-error: true
+      encoding: UTF-8
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.nova.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+sky:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+  jwt:
+    admin-secret-key: ${JWT_ADMIN_SECRET:}
+    admin-ttl: ${JWT_ADMIN_TTL:7200000}
+    admin-token-name: token
+    user-secret-key: ${JWT_USER_SECRET:}
+    user-ttl: ${JWT_USER_TTL:7200000}
+    user-token-name: authentication
+
+nova:
+  info:
+    name: Nova O2O 餐饮管理平台
+    version: 1.0.0
+    build-time: 2026-07-29 20:30
+    java-version: 17
+    spring-boot-version: 3.1.12
+
+logging:
+  level:
+    com.nova.mapper: debug
+    com.nova.service: info
+    com.nova.controller: info

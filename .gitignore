@@ -1,0 +1,36 @@
+# Java
+*.class
+*.jar
+*.war
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Maven
+log/
+*.log
+
+# IDE
+.idea/
+*.iml
+.classpath
+.project
+.settings
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+*.local
+application-dev.yml
+
+# Docs
+docs/
+
+# Backup
+*.bak
+*.bak2
+*.bak3
+*.bak4
