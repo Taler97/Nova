@@ -16,6 +16,11 @@ spring:
       url: jdbc:mysql://localhost:3306/sky_take_out?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false
       username: root
       password: ${DB_PASSWORD:}
+      # 连接池（默认 max-active=8 在高并发下会成为瓶颈）
+      initial-size: 5
+      min-idle: 5
+      max-active: 30
+      max-wait: 3000
   data:
     redis:
       host: 127.0.0.1
@@ -58,6 +63,6 @@ nova:
 
 logging:
   level:
-    com.nova.mapper: debug
+    com.nova.mapper: warn
     com.nova.service: info
     com.nova.controller: info

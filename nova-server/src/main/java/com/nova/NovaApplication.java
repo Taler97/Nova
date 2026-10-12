@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @SpringBootApplication
 @EnableTransactionManagement
 @EnableScheduling
-@EnableCaching
+@EnableCaching(proxyTargetClass = true)
 @ServletComponentScan
 public class NovaApplication {
 

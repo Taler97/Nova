@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
 import com.nova.context.BaseContext;
+import com.nova.config.LocalCacheConfiguration;
 import com.nova.dto.OrdersConfirmDTO;
 import com.nova.dto.OrdersPageQueryDTO;
 import com.nova.dto.OrdersRejectionDTO;
@@ -20,6 +21,10 @@ import com.nova.enumeration.OrderStatus;
 import com.nova.websocket.WebSocketServer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,8 +49,29 @@ public class OrderServiceImpl implements OrderService {
     private final WebSocketServer webSocketServer;
     private final StringRedisTemplate stringRedisTemplate;
 
+    /** 本地缓存管理器（用户私有数据），与 Redis 缓存管理器区分。 */
+    @Autowired
+    @Qualifier("caffeineCacheManager")
+    private CacheManager localCacheManager;
+
     private static final String IDEMPOTENT_KEY_PREFIX = "idempotent:order:";
     private static final long IDEMPOTENT_TOKEN_TTL_MINUTES = 5;
+
+    /** 按用户前缀精确失效其历史订单本地缓存（key 形如 {@code userId:page:pageSize:status}）。 */
+    private void evictUserOrderCache(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        org.springframework.cache.Cache cache = localCacheManager.getCache(LocalCacheConfiguration.USER_ORDERS);
+        if (cache == null) {
+            return;
+        }
+        Object nativeCache = cache.getNativeCache();
+        if (nativeCache instanceof com.github.benmanes.caffeine.cache.Cache<?, ?> caffeine) {
+            String prefix = userId + ":";
+            caffeine.asMap().keySet().removeIf(k -> k.toString().startsWith(prefix));
+        }
+    }
 
     @Override
     @Transactional
@@ -113,6 +139,9 @@ public class OrderServiceImpl implements OrderService {
 
         shoppingCartMapper.cleanByUserId(userId);
 
+        // 订单变更后失效该用户的历史订单本地缓存
+        evictUserOrderCache(userId);
+
         JSONObject msg = new JSONObject();
         msg.put("type", 1);
         msg.put("orderId", order.getId());
@@ -142,6 +171,7 @@ public class OrderServiceImpl implements OrderService {
         if (order != null) {
             order.setStatus(Orders.TO_BE_CONFIRMED);
             orderMapper.update(order);
+            evictUserOrderCache(order.getUserId());
         }
     }
 
@@ -162,9 +192,14 @@ public class OrderServiceImpl implements OrderService {
         order.setCancelTime(LocalDateTime.now());
         order.setCancelReason("用户取消");
         orderMapper.update(order);
+        evictUserOrderCache(order.getUserId());
     }
 
+    /** 用户私有数据 -> 本地缓存（Caffeine）。key = userId:page:pageSize:status。 */
     @Override
+    @Cacheable(cacheManager = "caffeineCacheManager",
+            cacheNames = LocalCacheConfiguration.USER_ORDERS,
+            key = "T(com.nova.context.BaseContext).getCurrentId() + ':' + #dto.page + ':' + #dto.pageSize + ':' + #dto.status")
     public PageResult historyOrders(OrdersPageQueryDTO dto) {
         Long userId = BaseContext.getCurrentId();
 
@@ -275,6 +310,7 @@ public class OrderServiceImpl implements OrderService {
         }
         order.setStatus(Orders.CONFIRMED);
         orderMapper.update(order);
+        evictUserOrderCache(order.getUserId());
     }
 
     @Override
@@ -287,6 +323,7 @@ public class OrderServiceImpl implements OrderService {
         order.setRejectionReason(dto.getRejectionReason());
         order.setCancelTime(LocalDateTime.now());
         orderMapper.update(order);
+        evictUserOrderCache(order.getUserId());
     }
 
     @Override
@@ -297,6 +334,7 @@ public class OrderServiceImpl implements OrderService {
         }
         order.setStatus(Orders.DELIVERY_IN_PROGRESS);
         orderMapper.update(order);
+        evictUserOrderCache(order.getUserId());
     }
 
     @Override
@@ -307,5 +345,6 @@ public class OrderServiceImpl implements OrderService {
         }
         order.setStatus(Orders.COMPLETED);
         orderMapper.update(order);
+        evictUserOrderCache(order.getUserId());
     }
 }

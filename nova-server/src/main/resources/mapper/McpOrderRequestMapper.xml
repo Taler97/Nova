@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nova.mapper.McpOrderRequestMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id"
+            parameterType="com.nova.entity.McpOrderRequest">
+        INSERT INTO mcp_order_request
+            (request_no, user_id, tool_name, action, payload_json, preview_json, status,
+             mcp_session_id, principal, idempotency_key, created_at, expires_at)
+        VALUES
+            (#{requestNo}, #{userId}, #{toolName}, #{action}, #{payloadJson}, #{previewJson}, #{status},
+             #{mcpSessionId}, #{principal}, #{idempotencyKey}, #{createdAt}, #{expiresAt})
+    </insert>
+
+    <update id="update" parameterType="com.nova.entity.McpOrderRequest">
+        UPDATE mcp_order_request
+        <set>
+            <if test="status != null">status = #{status},</if>
+            <if test="resultJson != null">result_json = #{resultJson},</if>
+            <if test="rejectReason != null">reject_reason = #{rejectReason},</if>
+            <if test="decidedBy != null">decided_by = #{decidedBy},</if>
+            <if test="decidedAt != null">decided_at = #{decidedAt},</if>
+            <if test="expiresAt != null">expires_at = #{expiresAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <select id="adminPage" resultType="com.nova.entity.McpOrderRequest">
+        SELECT * FROM mcp_order_request
+        <where>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+</mapper>

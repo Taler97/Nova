@@ -18,8 +18,10 @@ import com.nova.service.DishService;
 import com.nova.utils.AliOssUtil;
 import com.nova.vo.DishVO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.HashSet;
@@ -38,6 +40,11 @@ public class DishServiceImpl implements DishService {
     private final DishConverter dishConverter;
     private final CacheManager cacheManager;
     private final RedisBloomFilter bloomFilter;
+
+    /** 自注入代理：通过代理调用带 @Cacheable 的方法，避免自调用导致缓存失效。 */
+    @Autowired
+    @Lazy
+    private DishServiceImpl self;
 
     @Override
     @Transactional
@@ -136,7 +143,7 @@ public class DishServiceImpl implements DishService {
             return List.of();
         }
         // 从缓存获取原始数据，每次返回时重新签名，保证签名 URL 新鲜
-        List<DishVO> list = getCachedDishList(categoryId);
+        List<DishVO> list = self.getCachedDishList(categoryId);
         list.forEach(vo -> vo.setImage(aliOssUtil.convertToSignedUrl(vo.getImage())));
         return list;
     }

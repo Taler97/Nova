@@ -1,0 +1,21 @@
+server:
+  port: 8090
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: nova-mcp
+
+nova:
+  server:
+    # nova-server 基地址（M0 阶段 MCP 直连后端，网关推后）
+    base-url: http://localhost:8080
+
+logging:
+  level:
+    com.nova.mcp: info
+    io.modelcontextprotocol: info

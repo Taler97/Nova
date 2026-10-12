@@ -16,8 +16,10 @@ import com.nova.mapper.SetmealMapper;
 import com.nova.result.PageResult;
 import com.nova.service.CategoryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -31,6 +33,11 @@ public class CategoryServiceImpl implements CategoryService {
     private final CategoryConverter categoryConverter;
     private final CacheManager cacheManager;
     private final RedisBloomFilter bloomFilter;
+
+    /** 自注入代理：通过代理调用带 @Cacheable 的方法，避免自调用导致缓存失效。 */
+    @Autowired
+    @Lazy
+    private CategoryServiceImpl self;
 
     @Override
     public PageResult pageQuery(CategoryPageQueryDTO dto) {
@@ -73,7 +80,7 @@ public class CategoryServiceImpl implements CategoryService {
             // type 为 null 时清除旧缓存，防止之前 PageHelper 残留导致的分页数据被缓存
             evictAllCategoryCache();
         }
-        List<Category> list = getCachedCategoryList(type);
+        List<Category> list = self.getCachedCategoryList(type);
         return list;
     }
 

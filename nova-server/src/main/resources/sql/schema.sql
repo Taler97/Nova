@@ -175,3 +175,31 @@ CREATE TABLE IF NOT EXISTS order_detail (
     image      VARCHAR(500)                 COMMENT '菜品图片',
     dish_flavor VARCHAR(50)                 COMMENT '菜品口味'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单明细表';
+
+-- =============================================================
+-- 12) mcp_order_request — MCP 交易审批请求表
+--     写操作由 Agent 提交为「待审批申请」，人工批准后才真正执行
+-- =============================================================
+
+CREATE TABLE IF NOT EXISTS mcp_order_request (
+    id              BIGINT        PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
+    request_no      VARCHAR(32)   NOT NULL                COMMENT '申请单号',
+    user_id         BIGINT        NOT NULL                COMMENT '归属用户（审批与执行均以此身份）',
+    tool_name       VARCHAR(64)                           COMMENT '来源工具名',
+    action          VARCHAR(32)   NOT NULL                COMMENT '动作：SUBMIT/PAY/CANCEL/REMINDER',
+    payload_json    TEXT                                  COMMENT '原始请求参数',
+    preview_json    TEXT                                  COMMENT '给审批人看的预览（金额/清单/地址）',
+    status          VARCHAR(16)   NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING/APPROVED/REJECTED/EXECUTED/FAILED/EXPIRED',
+    mcp_session_id  VARCHAR(64)                           COMMENT '来源 MCP 会话（审计）',
+    principal       VARCHAR(128)                          COMMENT 'MCP 主体标识（哪个 Agent/租户）',
+    idempotency_key VARCHAR(64)                           COMMENT '申请级幂等键（防 Agent 重复申请）',
+    result_json     TEXT                                  COMMENT '执行结果（订单号或失败原因）',
+    reject_reason   VARCHAR(255)                          COMMENT '驳回原因',
+    decided_by      BIGINT                                COMMENT '审批人（员工ID）',
+    created_at      DATETIME                              COMMENT '创建时间',
+    expires_at      DATETIME                              COMMENT '过期时间（默认创建+30分钟）',
+    decided_at      DATETIME                              COMMENT '审批时间',
+    UNIQUE KEY uk_request_no (request_no),
+    UNIQUE KEY uk_idempotency_key (idempotency_key),
+    KEY idx_status_created (status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='MCP 交易审批请求表';

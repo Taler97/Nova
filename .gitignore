@@ -26,6 +26,10 @@ Thumbs.db
 *.local
 application-dev.yml
 
+# 压测脚本与产物（含服务器信息与生成的报表，不入库）
+deploy/jmeter/
+*.jtl
+
 # Docs
 docs/
 

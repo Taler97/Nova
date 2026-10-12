@@ -23,6 +23,7 @@
         <module>nova-common</module>
         <module>nova-pojo</module>
         <module>nova-server</module>
+        <module>nova-mcp</module>
     </modules>
 
     <properties>

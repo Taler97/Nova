@@ -7,6 +7,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.cache.RedisCache;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
@@ -38,6 +39,7 @@ public class RedisConfiguration {
     }
 
     @Bean
+    @Primary
     public RedisCacheManager cacheManager(RedisConnectionFactory redisConnectionFactory) {
         Duration baseTtl = Duration.ofMinutes(30);
         long jitterRangeMillis = Duration.ofMinutes(10).toMillis();

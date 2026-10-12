@@ -48,7 +48,7 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
 
         log.info("注册用户端拦截器...");
         registry.addInterceptor(jwtTokenUserInterceptor)
-                .addPathPatterns("/user/**")
+                .addPathPatterns("/user/**", "/mcp-bridge/**")
                 .excludePathPatterns("/user/user/login")
                 .excludePathPatterns("/user/user/register")
                 .excludePathPatterns("/user/user/webLogin")

@@ -19,8 +19,10 @@ import com.nova.service.SetmealService;
 import com.nova.utils.AliOssUtil;
 import com.nova.vo.SetmealVO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.HashSet;
@@ -39,6 +41,11 @@ public class SetmealServiceImpl implements SetmealService {
     private final SetmealConverter setmealConverter;
     private final CacheManager cacheManager;
     private final RedisBloomFilter bloomFilter;
+
+    /** 自注入代理：通过代理调用带 @Cacheable 的方法，避免自调用导致缓存失效。 */
+    @Autowired
+    @Lazy
+    private SetmealServiceImpl self;
 
     @Override
     @Transactional
@@ -137,7 +144,7 @@ public class SetmealServiceImpl implements SetmealService {
         if (categoryId != null && !bloomFilter.mightContain("category:id", categoryId)) {
             return List.of();
         }
-        List<SetmealVO> list = getCachedSetmealList(categoryId);
+        List<SetmealVO> list = self.getCachedSetmealList(categoryId);
         list.forEach(vo -> vo.setImage(aliOssUtil.convertToSignedUrl(vo.getImage())));
         return list;
     }

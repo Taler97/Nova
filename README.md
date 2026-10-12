@@ -7,6 +7,9 @@
 
 ## 功能特性
 
+- **交易链路 MCP 化**：独立 `nova-mcp` 模块，基于 MCP Java SDK（Streamable HTTP + SSE）对外暴露 9 个 Tool，AI Agent（Claude Desktop / Trae 等）可远程接入完成「对话式下单」
+- **交易审批闸门**：写操作由「直接执行」改为「提交申请」，人工审批后以用户身份复用幂等令牌完成真实下单；含申请单状态机、申请级幂等键、乐观守卫与超时自动过期
+- **两级缓存**：Redis 缓存公共热点（分类/菜品/套餐）+ Caffeine 缓存用户私有数据（订单/地址，userId 前缀精确失效）
 - **双端双令牌鉴权**：管理端 / 用户端使用独立 JWT 密钥签发 Token，无状态、可水平扩展
 - **缓存优化**：Redis 缓存热点数据（分类 / 菜品 / 套餐列表），TTL 随机抖动防缓存雪崩，布隆过滤器防缓存穿透
 - **登录安全**：管理端账号锁定（5 次失败锁 30 分钟）+ IP 限流（10 次/分钟），用户端 IP 限流
@@ -29,6 +32,8 @@
 | ORM | MyBatis + PageHelper | 3.0.3 / 2.1.0 | SQL 映射 + 自动物理分页 |
 | 数据库 | MySQL | 8.0 | 主业务数据库（`sky_take_out`） |
 | 缓存 | Redis | 7.x | 会话缓存 + 业务缓存 + 布隆过滤器 + 分布式锁 |
+| 本地缓存 | Caffeine | — | 用户私有数据进程内缓存（订单/地址） |
+| MCP | MCP Java SDK | — | 交易链路 MCP 化（Streamable HTTP + SSE） |
 | 连接池 | Druid | 1.2.20 | 数据库连接池 + 监控 |
 | 鉴权 | JWT (jjwt) | 0.12.6 | 双令牌无状态认证（管理端/用户端独立密钥） |
 | 对象映射 | MapStruct | 1.5.5.Final | 编译期 DTO/Entity/VO 自动转换，零反射开销 |
@@ -65,6 +70,7 @@
 | **nova-common** | 公共基础设施：常量、枚举、异常体系、统一响应模型、ThreadLocal 上下文、工具类（JWT/OSS/HTTP）、配置属性绑定 |
 | **nova-pojo** | 数据对象：数据库实体（11 个）、DTO（16 个）、VO（6 个），不含业务逻辑 |
 | **nova-server** | 核心业务服务：控制器、业务实现、Mapper、MapStruct 转换器、JWT 拦截器、AOP 切面、定时任务、WebSocket |
+| **nova-mcp** | MCP 接入层（独立进程，:8090）：基于 MCP Java SDK 暴露交易 Tool、两段式认证与身份映射、会话身份管理；通过 HTTP 调用 `nova-server` REST，零侵入 |
 
 ---
 
@@ -175,6 +181,75 @@ curl http://localhost:8080/user/category/list?type=1
 | `code` | 状态码，`1` 成功，`0` 失败 |
 | `data` | 业务数据 |
 | `msg` | 提示信息 |
+
+---
+
+## MCP 接入（交易链路 MCP 化）
+
+`nova-mcp` 是独立进程的 MCP Server（:8090），将用户端交易能力开放给 AI Agent。
+
+### 客户端配置
+
+```json
+{
+  "mcpServers": {
+    "nova": { "url": "http://<host>:8090/mcp", "transport": "streamable-http" }
+  }
+}
+```
+
+### 工具清单（9 个）
+
+| Tool | 类型 | 说明 |
+|------|------|------|
+| `login_nova_account` | 身份 | 手机号 + 密码登录，绑定会话身份 |
+| `list_my_orders` | 读 | 历史订单（分页） |
+| `get_order_detail` | 读 | 订单详情 |
+| `list_my_addresses` | 读 | 收货地址列表 |
+| `add_to_cart` | 写 | 加入购物车 |
+| `get_idempotent_token` | 写 | 获取下单幂等令牌 |
+| `submit_order` | 写 | 直接提交订单 |
+| `submit_order_request` | 写 | **提交下单申请**（进入审批队列，推荐） |
+| `get_order_request_status` | 读 | 查询申请单审批/执行状态 |
+
+### 审批下单链路
+
+```
+initialize → login → list_my_addresses → add_to_cart
+   → submit_order_request → (人工审批) → 执行真实下单 → get_order_request_status
+```
+
+### 安全与审批设计
+
+- **两段式认证**：MCP 层准入（OAuth 2.1 Resource Server / 静态 Bearer）+ 身份映射（会话内登录换取 Nova JWT），**禁止令牌透传**
+- **审批闸门状态机**：`PENDING → APPROVED → EXECUTED`（或 `REJECTED` / `FAILED` / 超时 `EXPIRED`）
+- **申请级幂等键**：Agent 重试不会产生多条待审批
+- **乐观守卫**：`UPDATE ... WHERE status='PENDING'` 防并发重复审批
+- **执行器复用幂等令牌**：以申请单 `userId` 身份执行，重试也不会重复下单
+
+审批入口（管理端）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/admin/mcp-request/page` | 待审批 / 历史分页 |
+| PUT | `/admin/mcp-request/approve/{id}` | 批准并执行 |
+| PUT | `/admin/mcp-request/reject/{id}` | 驳回 |
+
+---
+
+## 性能压测
+
+在 **2 核 2G 单机（MySQL / Redis / 业务 / MCP 四组件同机）** 环境下，使用 JMeter 完成多用户 50/100/150 并发阶梯全链路压测与缓存开/关 A-B 对照：
+
+| 指标 | 结果 |
+|------|------|
+| 全链路吞吐 | **114 TPS** |
+| 下单量 | 约 **530 单/分钟** |
+| 稳定性 | **0 崩溃**，错误率 <1.5% |
+| 连接池调优 | Druid `max-active` 8 → 30，**TPS +30%、P99 -28%** |
+| 缓存命中率 | **85.5%** |
+
+**瓶颈定位过程**：通过分位数（P50/P95/P99）+ 利特尔法则，先定位 **Druid 连接池沿用默认值（max-active=8）**并调优（DB 类接口 P99 最多下降 61%，纯缓存接口尾部不变）；剩余瓶颈为 **CPU 饱和**（登录的 BCrypt 占单次登录耗时约 70%）。扩容路径为「拆库独立部署 + 水平扩展」。
 
 ---
 
